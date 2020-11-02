@@ -49,28 +49,8 @@ namespace AQbit {
     //% weight=100
     //% blockId="aqb_pms_pasive" block="put PMS in passive mode"
     export function putPMSInPassiveMode(): void {
-        pins.digitalWritePin(DigitalPin.P13, 1)
-        watchdogRunTime = input.runningTime()
-        watchdogIsActive = true
-        basic.clearScreen()
-        serialToPMS()
+	pins.digitalWritePin(DigitalPin.P13, 1)
         serial.setRxBufferSize(32)
-        let request = pins.createBuffer(7);
-        request.setNumber(NumberFormat.UInt8LE, 0, 66);
-        request.setNumber(NumberFormat.UInt8LE, 1, 77);
-        request.setNumber(NumberFormat.UInt8LE, 2, 225);
-        request.setNumber(NumberFormat.UInt8LE, 3, 0);
-        request.setNumber(NumberFormat.UInt8LE, 4, 0);
-        request.setNumber(NumberFormat.UInt8LE, 5, 1);
-        request.setNumber(NumberFormat.UInt8LE, 6, 112);
-        serial.writeBuffer(request)
-        basic.pause(500)
-        let response = serial.readBuffer(32)
-        if (!verifyBytes(response)) {
-            serial.writeBuffer(request)
-            basic.pause(500)
-        }
-        watchdogIsActive = false
     }
 
     /**
@@ -81,32 +61,14 @@ namespace AQbit {
     export function readPMS(): number {
         watchdogRunTime = input.runningTime()
         watchdogIsActive = true
-        basic.clearScreen()
         serialToPMS()
         serial.setRxBufferSize(32)
-        let request = pins.createBuffer(7);
-        request.setNumber(NumberFormat.UInt8LE, 0, 66);
-        request.setNumber(NumberFormat.UInt8LE, 1, 77);
-        request.setNumber(NumberFormat.UInt8LE, 2, 226);
-        request.setNumber(NumberFormat.UInt8LE, 3, 0);
-        request.setNumber(NumberFormat.UInt8LE, 4, 0);
-        request.setNumber(NumberFormat.UInt8LE, 5, 1);
-        request.setNumber(NumberFormat.UInt8LE, 6, 113);
-        serial.writeBuffer(request)
         basic.pause(1000)
         let response = serial.readBuffer(32)
         if (verifyBytes(response)) {
             watchdogIsActive = false
             return response[13]
         } else {
-            request.setNumber(NumberFormat.UInt8LE, 0, 66);
-            request.setNumber(NumberFormat.UInt8LE, 1, 77);
-            request.setNumber(NumberFormat.UInt8LE, 2, 226);
-            request.setNumber(NumberFormat.UInt8LE, 3, 0);
-            request.setNumber(NumberFormat.UInt8LE, 4, 0);
-            request.setNumber(NumberFormat.UInt8LE, 5, 1);
-            request.setNumber(NumberFormat.UInt8LE, 6, 113);
-            serial.writeBuffer(request)
             basic.pause(1000)
             response = serial.readBuffer(32)
             if (verifyBytes(response)) {
@@ -229,7 +191,7 @@ namespace AQbit {
     //% weight=97
     //% blockId="aqb_read_humidity" block="read humidity"
     export function readHumidity(): number {
-        get()
+	    get()
         return H
     }
 
@@ -271,9 +233,12 @@ namespace AQbit {
     //% blockId="aqb_wifi_on" block="connect to WiFi network %ssid, %key"
     export function connectToWiFiNetwork(ssid: string, key: string): void {
         connectToWiFiBit()
-        writeToSerial("AT+RST", 2000)
+        writeToSerial("AT+RST", 5000)
+	    writeToSerial("AT+SLEEP=0", 2000)
+	    writeToSerial("AT+RFPOWER=82", 2000)    
         writeToSerial("AT+CWMODE=1", 5000)
-        writeToSerial("AT+CWJAP=\"" + ssid + "\",\"" + key + "\"", 6000)
+	    writeToSerial("AT+CWRECONNCFG=30,99", 5000)
+	    writeToSerial("AT+CWJAP=\"" + ssid + "\",\"" + key + "\"", 15000)
     }
 
 /*
@@ -289,7 +254,7 @@ namespace AQbit {
     //% weight=94
     //% blockId="aqb_http_method" block="execute HTTP method %method|host: %host|port: %port|path: %urlPath||headers: %headers|body: %body"
     function executeHttpMethod(method: HttpMethod, host: string, port: number, urlPath: string, headers?: string, body?: string): void {
-        connectToWiFiBit()
+	connectToWiFiBit()
         let myMethod: string
         switch (method) {
             case HttpMethod.GET: myMethod = "GET"; break;
@@ -346,12 +311,13 @@ namespace AQbit {
     //% weight=92
     //% blockId="aqb_send_data" block="send data|temperature %temperature|pressure %pressure|humidity %humidity|PM %PM|token %token"
     export function sendData(temperature: number, pressure: number, humidity: number, PM: number, token: string): void {
-        executeHttpMethod(
+        serial.setRxBufferSize(32)
+	    executeHttpMethod(
             HttpMethod.GET,
             "134.209.242.221",
             80,
             "/communicate/?temperature=" + Math.trunc(temperature) + "&humidity=" + humidity + "&pressure=" + pressure + "&pm=" + PM + "&token=" + token
-        )
+        )    
     }
 
     /**
@@ -361,8 +327,10 @@ namespace AQbit {
     //% blockId="aqb_watchdog" block="prevent sensor blocking"
     export function preventSensorBlocking(): void {
         while (true) {
-                if (watchdogIsActive && ((input.runningTime() - watchdogRunTime) > 20000)) {
-                    control.reset()
+                if (watchdogIsActive){
+		    if (input.runningTime() - watchdogRunTime > 10000) {
+			    control.reset()
+		    }
                 }
                 basic.pause(100)
         }
